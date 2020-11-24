@@ -9,68 +9,80 @@ import (
 	"github.com/getlantern/systray"
 )
 
-var (
-	nord = &NordVPN{}
-)
-
-func main() {
-	systray.Run(onReady, onExit)
+type NordTray struct {
+	vpn        *NordVPN
+	mConnect   *systray.MenuItem
+	mDiconnect *systray.MenuItem
+	mQuit      *systray.MenuItem
 }
 
-func onReady() {
+func newNordTray() *NordTray {
+	nt := &NordTray{vpn: &NordVPN{}}
+	nt.mConnect = systray.AddMenuItem("Connect", "Connect NordVPN")
+	nt.mDiconnect = systray.AddMenuItem("Disconnect", "Disconnect NordVPN")
+	nt.mQuit = systray.AddMenuItem("Quit", "Quit NordTray")
+
+	return nt
+}
+
+func (nt *NordTray) run() {
+	systray.Run(nt.onReady, nt.onExit)
+}
+
+func (nt *NordTray) onReady() {
 	systray.SetTitle("NordTray")
 	systray.SetIcon(inactiveIcon)
 
-	mConnect := systray.AddMenuItem("Connect", "Connect NordVPN")
-	mDiconnect := systray.AddMenuItem("Disconnect", "Disconnect NordVPN")
-	mQuit := systray.AddMenuItem("Quit", "Quit NordTray")
-
-	update := func() {
-		nord.Update()
-		if nord.Status() == DONE && nord.Connected() {
-			systray.SetIcon(activeIcon)
-		} else {
-			systray.SetIcon(inactiveIcon)
-		}
-
-		switch nord.Status() {
-		case DONE:
-			if nord.Connected() {
-				mConnect.Hide()
-				mDiconnect.Show()
-			} else {
-				mConnect.Show()
-				mDiconnect.Hide()
-			}
-		case STALLED:
-			mConnect.Show()
-			mDiconnect.Show()
-		case FAILED:
-			mConnect.Show()
-			mDiconnect.Hide()
-		}
-	}
-
-	update()
-	go func() {
-		for {
-			select {
-			case <-mConnect.ClickedCh:
-				nord.Connect()
-				update()
-			case <-mDiconnect.ClickedCh:
-				nord.Disconnect()
-				update()
-			case <-mQuit.ClickedCh:
-				systray.Quit()
-				return
-			case <-time.After(10 * time.Second):
-				update()
-			}
-		}
-	}()
+	nt.update()
+	go nt.loop()
 }
 
-func onExit() {
+func (nt *NordTray) onExit() {}
 
+func (nt *NordTray) update() {
+	nt.vpn.Update()
+	if nt.vpn.Status() == DONE && nt.vpn.Connected() {
+		systray.SetIcon(activeIcon)
+	} else {
+		systray.SetIcon(inactiveIcon)
+	}
+
+	switch nt.vpn.Status() {
+	case DONE:
+		if nt.vpn.Connected() {
+			nt.mConnect.Hide()
+			nt.mDiconnect.Show()
+		} else {
+			nt.mConnect.Show()
+			nt.mDiconnect.Hide()
+		}
+	case STALLED:
+		nt.mConnect.Show()
+		nt.mDiconnect.Show()
+	case FAILED:
+		nt.mConnect.Show()
+		nt.mDiconnect.Hide()
+	}
+}
+
+func (nt *NordTray) loop() {
+	for {
+		select {
+		case <-nt.mConnect.ClickedCh:
+			nt.vpn.Connect()
+			nt.update()
+		case <-nt.mDiconnect.ClickedCh:
+			nt.vpn.Disconnect()
+			nt.update()
+		case <-nt.mQuit.ClickedCh:
+			systray.Quit()
+			return
+		case <-time.After(10 * time.Second):
+			nt.update()
+		}
+	}
+}
+
+func main() {
+	newNordTray().run()
 }
