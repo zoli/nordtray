@@ -1,8 +1,9 @@
+//go:generate sh -c "$GOPATH/bin/2goarray activeIcon main < assets/nord-active.png > active_icon.go"
+//go:generate sh -c "$GOPATH/bin/2goarray inactiveIcon main < assets/nord-inactive.png > inactive_icon.go"
+
 package main
 
 import (
-	"io/ioutil"
-	"log"
 	"time"
 
 	"github.com/getlantern/systray"
@@ -10,25 +11,15 @@ import (
 
 var (
 	nord = &NordVPN{}
-
-	activeIcon, inActiveIcon []byte
 )
 
 func main() {
-	var err error
-	if activeIcon, err = ioutil.ReadFile("assets/nord-active.png"); err != nil {
-		log.Fatalln(err)
-	}
-	if inActiveIcon, err = ioutil.ReadFile("assets/nord-inactive.png"); err != nil {
-		log.Fatalln(err)
-	}
-
 	systray.Run(onReady, onExit)
 }
 
 func onReady() {
 	systray.SetTitle("NordTray")
-	systray.SetIcon(inActiveIcon)
+	systray.SetIcon(inactiveIcon)
 
 	mConnect := systray.AddMenuItem("Connect", "Connect NordVPN")
 	mDiconnect := systray.AddMenuItem("Disconnect", "Disconnect NordVPN")
@@ -39,7 +30,7 @@ func onReady() {
 		if nord.Status() == DONE && nord.Connected() {
 			systray.SetIcon(activeIcon)
 		} else {
-			systray.SetIcon(inActiveIcon)
+			systray.SetIcon(inactiveIcon)
 		}
 
 		switch nord.Status() {
