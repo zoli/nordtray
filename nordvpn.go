@@ -3,9 +3,10 @@ package main
 import (
 	"context"
 	"fmt"
-	"log"
 	"sync"
 	"time"
+
+	log "github.com/sirupsen/logrus"
 )
 
 type (
@@ -54,16 +55,16 @@ func (n *NordVPN) parse(data string) {
 		n.connected = false
 	default:
 		n.status = STALLED
-		log.Printf("WARN unrecognized status %s", status)
+		log.Warnf("unrecognized status %s", status)
 	}
 }
 
 func (n *NordVPN) parseErr(cmd string, err error) {
 	if err == context.DeadlineExceeded {
-		log.Printf("ERR on %s exceeded timeout", cmd)
+		log.Errorf("on %s exceeded timeout", cmd)
 		n.status = STALLED
 	} else {
-		log.Printf("ERR on %s: %s", cmd, err)
+		log.Errorf("on %s: %s", cmd, err)
 		n.status = FAILED
 	}
 }
