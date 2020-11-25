@@ -2,6 +2,7 @@ package main
 
 import (
 	"context"
+	"errors"
 	"fmt"
 	"sync"
 	"time"
@@ -22,12 +23,18 @@ type (
 const (
 	STALLED Status = iota
 	FAILED
+	NONETWORK
 	DONE
 
 	CONNECTED    = "Connected"
 	DISCONNECTED = "Disconnected"
 
-	template = "\r-\r  \r\r-\r  \rStatus: %s\nCurrent server: is57.nordvpn.com\nCountry: Iceland\nCity: Reykjavik\nYour new IP: 45.133.192.139\nCurrent technology: NordLynx\nTransfer: 127.29 MiB received, 414.97 MiB sent\nUptime: 36 minutes 7 seconds\n"
+	statusTemplate   = "\r-\r  \r\r-\r  \rStatus: %s\nCurrent server: is57.nordvpn.com\nCountry: Iceland\nCity: Reykjavik\nYour new IP: 45.133.192.139\nCurrent technology: NordLynx\nTransfer: 127.29 MiB received, 414.97 MiB sent\nUptime: 36 minutes 7 seconds\n"
+	noNetErrTemplate = "\r-\r  \rPlease check your internet connection and try again.\n"
+)
+
+var (
+	NoNetErr = errors.New("no network connection")
 )
 
 func (n *NordVPN) Update() {
@@ -46,7 +53,7 @@ func (n *NordVPN) Update() {
 
 func (n *NordVPN) parse(data string) {
 	var status string
-	fmt.Sscanf(data, template, &status)
+	fmt.Sscanf(data, statusTemplate, &status)
 
 	switch status {
 	case CONNECTED:
@@ -63,6 +70,9 @@ func (n *NordVPN) parseErr(cmd string, err error) {
 	if err == context.DeadlineExceeded {
 		log.Errorf("on %s exceeded timeout", cmd)
 		n.status = STALLED
+	} else if err == NoNetErr {
+		log.Debugln("on %s: no network", cmd)
+		n.status = NONETWORK
 	} else {
 		log.Errorf("on %s: %s", cmd, err)
 		n.status = FAILED

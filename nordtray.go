@@ -7,14 +7,15 @@ import (
 )
 
 type NordTray struct {
-	vpn        *NordVPN
-	mConnect   *systray.MenuItem
-	mDiconnect *systray.MenuItem
-	mQuit      *systray.MenuItem
+	vpn         *NordVPN
+	loopTimeout time.Duration
+	mConnect    *systray.MenuItem
+	mDiconnect  *systray.MenuItem
+	mQuit       *systray.MenuItem
 }
 
 func newNordTray() *NordTray {
-	nt := &NordTray{vpn: &NordVPN{}}
+	nt := &NordTray{vpn: &NordVPN{}, loopTimeout: 10 * time.Second}
 	nt.mConnect = systray.AddMenuItem("Connect", "Connect NordVPN")
 	nt.mDiconnect = systray.AddMenuItem("Disconnect", "Disconnect NordVPN")
 	nt.mQuit = systray.AddMenuItem("Quit", "Quit NordTray")
@@ -38,6 +39,12 @@ func (nt *NordTray) onExit() {}
 
 func (nt *NordTray) update() {
 	nt.vpn.Update()
+	if nt.vpn.Status() == NONETWORK {
+		nt.loopTimeout = 60 * time.Second
+	} else {
+		nt.loopTimeout = 10 * time.Second
+	}
+
 	if nt.vpn.Status() == DONE && nt.vpn.Connected() {
 		systray.SetIcon(activeIcon)
 	} else {
@@ -74,7 +81,7 @@ func (nt *NordTray) loop() {
 		case <-nt.mQuit.ClickedCh:
 			systray.Quit()
 			return
-		case <-time.After(10 * time.Second):
+		case <-time.After(nt.loopTimeout):
 			nt.update()
 		}
 	}

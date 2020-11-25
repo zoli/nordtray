@@ -14,7 +14,10 @@ func execCmd(timeout time.Duration, args ...string) (string, error) {
 	cmd := exec.CommandContext(ctx, args[0], args[1:]...)
 	out, err := cmd.Output()
 	if err != nil {
-		return "", fmt.Errorf("non zero exit code: %s", err)
+		if string(out) == noNetErrTemplate {
+			return "", NoNetErr
+		}
+		return "", fmt.Errorf("non zero exit code: %s: %s", err, string(out))
 	}
 	if ctx.Err() == context.DeadlineExceeded {
 		return "", err
