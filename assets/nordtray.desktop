@@ -1,0 +1,7 @@
+[Desktop Entry]
+Type=Application
+Name=NordTray
+Icon=NordTray
+GenericName=NordVPN tray
+Exec=/usr/lib/nordtray/nordtray
+Categories=Network;
