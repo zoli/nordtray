@@ -3,5 +3,5 @@ Type=Application
 Name=NordTray
 Icon=NordTray
 GenericName=NordVPN tray
-Exec=/usr/lib/nordtray/nordtray
+Exec=/usr/bin/nordtray
 Categories=Network;
