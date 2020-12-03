@@ -15,7 +15,7 @@ func execCmd(timeout time.Duration, args ...string) (string, error) {
 	out, err := cmd.Output()
 	if err != nil {
 		if string(out) == noNetErrTemplate {
-			return "", NoNetErr
+			return "", ErrNoNet
 		}
 		return "", fmt.Errorf("non zero exit code: %s: %s", err, string(out))
 	}

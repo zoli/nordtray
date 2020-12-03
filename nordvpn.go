@@ -34,7 +34,7 @@ const (
 )
 
 var (
-	NoNetErr = errors.New("no network connection")
+	ErrNoNet = errors.New("no network connection")
 )
 
 func (n *NordVPN) Update() {
@@ -70,7 +70,7 @@ func (n *NordVPN) parseErr(cmd string, err error) {
 	if err == context.DeadlineExceeded {
 		log.Errorf("on %s exceeded timeout", cmd)
 		n.status = STALLED
-	} else if err == NoNetErr {
+	} else if err == ErrNoNet {
 		log.Debugln("on %s: no network", cmd)
 		n.status = NONETWORK
 	} else {
