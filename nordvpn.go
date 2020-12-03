@@ -3,7 +3,7 @@ package main
 import (
 	"context"
 	"errors"
-	"fmt"
+	"regexp"
 	"sync"
 	"time"
 
@@ -29,12 +29,12 @@ const (
 	CONNECTED    = "Connected"
 	DISCONNECTED = "Disconnected"
 
-	statusTemplate   = "\r-\r  \r\r-\r  \rStatus: %s\nCurrent server: is57.nordvpn.com\nCountry: Iceland\nCity: Reykjavik\nYour new IP: 45.133.192.139\nCurrent technology: NordLynx\nTransfer: 127.29 MiB received, 414.97 MiB sent\nUptime: 36 minutes 7 seconds\n"
 	noNetErrTemplate = "\r-\r  \rPlease check your internet connection and try again.\n"
 )
 
 var (
 	ErrNoNet = errors.New("no network connection")
+	statusRe = regexp.MustCompile("Status: (.*)")
 )
 
 func (n *NordVPN) Update() {
@@ -53,7 +53,10 @@ func (n *NordVPN) Update() {
 
 func (n *NordVPN) parse(data string) {
 	var status string
-	fmt.Sscanf(data, statusTemplate, &status)
+	ss := statusRe.FindStringSubmatch(data)
+	if len(ss) > 1 {
+		status = ss[1]
+	}
 
 	switch status {
 	case CONNECTED:
