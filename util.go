@@ -29,5 +29,5 @@ func execCmd(timeout time.Duration, args ...string) (string, error) {
 
 func cleanCliOutPut(out string) string {
 	r := strings.NewReplacer("-\r", "", "|\r", "", "/\r", "", "\\\r", "")
-	return r.Replace(out)
+	return strings.ReplaceAll(r.Replace(out), "\r  \r", "\r")
 }
