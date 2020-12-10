@@ -29,7 +29,7 @@ const (
 	CONNECTED    = "Connected"
 	DISCONNECTED = "Disconnected"
 
-	noNetErrTemplate = "\r-\r  \rPlease check your internet connection and try again.\n"
+	noNetErrStr = "Please check your internet connection and try again"
 )
 
 var (

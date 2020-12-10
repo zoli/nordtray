@@ -4,6 +4,7 @@ import (
 	"context"
 	"fmt"
 	"os/exec"
+	"strings"
 	"time"
 )
 
@@ -13,14 +14,20 @@ func execCmd(timeout time.Duration, args ...string) (string, error) {
 
 	cmd := exec.CommandContext(ctx, args[0], args[1:]...)
 	out, err := cmd.Output()
+	res := cleanCliOutPut(string(out))
 	if err != nil {
-		if string(out) == noNetErrTemplate {
+		if strings.Contains(res, noNetErrStr) {
 			return "", ErrNoNet
 		}
-		return "", fmt.Errorf("non zero exit code: %s: %s", err, string(out))
+		return "", fmt.Errorf("non zero exit code: %s: %s", err, res)
 	}
 	if ctx.Err() == context.DeadlineExceeded {
 		return "", err
 	}
-	return string(out), nil
+	return res, nil
+}
+
+func cleanCliOutPut(out string) string {
+	r := strings.NewReplacer("-\r", "", "|\r", "", "/\r", "", "\\\r", "")
+	return r.Replace(out)
 }
