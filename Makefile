@@ -3,7 +3,8 @@ all: generate build
 generate:
 	go generate
 build:
-	go build -o nordtray
+	go build -trimpath -buildmode=pie -mod=readonly -modcacherw -ldflags \
+	"-linkmode external -extldflags \"${LDFLAGS}\"" -o nordtray
 
 install: install_bin install_desktop
 uninstall:
