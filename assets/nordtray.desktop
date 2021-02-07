@@ -5,6 +5,7 @@ Icon=NordTray
 GenericName=NordVPN tray icon plus some other actions
 Exec=/usr/lib/nordtray/nordtray
 Categories=Network;
+Actions=Connect;Disconnect;Specific;
 
 [Desktop Action Connect]
 Name=Connect
@@ -14,6 +15,6 @@ Exec=nordvpn c
 Name=Disconnect
 Exec=nordvpn d
 
-[Desktop Action Connect UK]
+[Desktop Action Specific]
 Name=Connect UK
 Exec=nordvpn c uk
