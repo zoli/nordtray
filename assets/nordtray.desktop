@@ -2,19 +2,6 @@
 Type=Application
 Name=NordTray
 Icon=NordTray
-GenericName=NordVPN tray icon plus some other actions
+GenericName=NordVPN tray
 Exec=/usr/lib/nordtray/nordtray
 Categories=Network;
-Actions=Connect;Disconnect;Specific;
-
-[Desktop Action Connect]
-Name=Connect
-Exec=nordvpn c
-
-[Desktop Action Disconnect]
-Name=Disconnect
-Exec=nordvpn d
-
-[Desktop Action Specific]
-Name=Connect UK
-Exec=nordvpn c uk
