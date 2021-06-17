@@ -7,18 +7,22 @@ import (
 )
 
 type NordTray struct {
-	vpn         *NordVPN
-	loopTimeout time.Duration
-	loading     bool
-	mConnect    *systray.MenuItem
-	mDiconnect  *systray.MenuItem
-	mQuit       *systray.MenuItem
+	vpn          *NordVPN
+	loopTimeout  time.Duration
+	loading      bool
+	labelToggled bool
+	mConnect     *systray.MenuItem
+	mDiconnect   *systray.MenuItem
+	mToggleLabel *systray.MenuItem
+	mQuit        *systray.MenuItem
 }
 
 func newNordTray() *NordTray {
 	nt := &NordTray{vpn: &NordVPN{}, loopTimeout: 10 * time.Second}
 	nt.mConnect = systray.AddMenuItem("Connect", "Connect NordVPN")
 	nt.mDiconnect = systray.AddMenuItem("Disconnect", "Disconnect NordVPN")
+	nt.labelToggled = false
+	nt.mToggleLabel = systray.AddMenuItemCheckbox("Toggle label", "Toggle the 'NordTray' label", labelToggled)
 	nt.mQuit = systray.AddMenuItem("Quit", "Quit NordTray")
 
 	return nt
@@ -29,7 +33,7 @@ func (nt *NordTray) run() {
 }
 
 func (nt *NordTray) onReady() {
-	systray.SetTitle("NordTray")
+	systray.SetTitle(" ") //Not sure whether this is required. Set to empty string if possible.
 	systray.SetIcon(inactiveIcon)
 
 	nt.update()
@@ -77,6 +81,13 @@ func (nt *NordTray) loop() {
 		case <-nt.mDiconnect.ClickedCh:
 			go nt.loadingIcon()
 			nt.vpn.Disconnect()
+			nt.update()
+		case <-nt.mToggleLabel.ClickedCh:
+			if nt.mToggleLabel.Checked() == true {
+				systray.SetTitle("NordTray")
+			} else {
+				systray.SetTitle(" ") //Set title to empty string, if allowed
+			}
 			nt.update()
 		case <-nt.mQuit.ClickedCh:
 			systray.Quit()
