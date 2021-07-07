@@ -29,7 +29,6 @@ func (nt *NordTray) run() {
 }
 
 func (nt *NordTray) onReady() {
-	systray.SetTitle("NordTray")
 	systray.SetIcon(inactiveIcon)
 
 	nt.update()
