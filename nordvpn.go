@@ -7,6 +7,7 @@ import (
 	"sync"
 	"time"
 
+	parallelizer "github.com/shomali11/parallelizer"
 	log "github.com/sirupsen/logrus"
 )
 
@@ -15,8 +16,9 @@ type (
 
 	NordVPN struct {
 		sync.Mutex
-		status    Status
-		connected bool
+		status       Status
+		connected    bool
+		killswitchOn bool
 	}
 )
 
@@ -29,44 +31,85 @@ const (
 	CONNECTED    = "Connected"
 	DISCONNECTED = "Disconnected"
 
+	ENABLED  = "enabled"
+	DISABLED = "disabled"
+
 	noNetErrStr = "Please check your internet connection and try again"
 )
 
 var (
-	ErrNoNet = errors.New("no network connection")
-	statusRe = regexp.MustCompile("Status: (.*)")
+	ErrNoNet     = errors.New("no network connection")
+	statusRe     = regexp.MustCompile("Status: (.*)")
+	killswitchRe = regexp.MustCompile("Kill Switch: (.*)")
 )
 
 func (n *NordVPN) Update() {
+	log.SetLevel(log.DebugLevel)
 	n.Lock()
 	defer n.Unlock()
+	group := parallelizer.NewGroup()
+	defer group.Close()
 
+	group.Add(n.parseUpdate)
+
+	group.Add(n.parseKillswitch)
+
+	ctx, cancel := context.WithTimeout(context.Background(), 2100*time.Millisecond)
+	defer cancel()
+
+	err := group.Wait(parallelizer.WithContext(ctx))
+
+	if err != nil {
+		log.Errorf("Error in parallelizer: %v", err)
+	}
+}
+
+func (n *NordVPN) parseUpdate() {
 	out, err := execCmd(2*time.Second, "nordvpn", "status")
 	if err != nil {
 		n.parseErr("update", err)
 		return
 	}
-
 	n.status = DONE
-	n.parse(out)
-}
+	match := n.getFirstMatch(out, statusRe)
 
-func (n *NordVPN) parse(data string) {
-	var status string
-	ss := statusRe.FindStringSubmatch(data)
-	if len(ss) > 1 {
-		status = ss[1]
-	}
-
-	switch status {
+	switch match {
 	case CONNECTED:
 		n.connected = true
 	case DISCONNECTED:
 		n.connected = false
 	default:
 		n.status = STALLED
-		log.Warnf("unrecognized status %s", status)
+		log.Warnf("unrecognized status %s", match)
 	}
+}
+
+func (n *NordVPN) parseKillswitch() {
+	out, err := execCmd(2*time.Second, "nordvpn", "settings")
+	if err != nil {
+		n.parseErr("killswitch status", err)
+		return
+	}
+	n.status = DONE
+	match := n.getFirstMatch(out, killswitchRe)
+
+	switch match {
+	case ENABLED:
+		n.killswitchOn = true
+	case DISABLED:
+		n.killswitchOn = false
+	default:
+		n.status = STALLED
+		log.Warnf("unrecognized killswitch status %s", match)
+	}
+}
+
+func (n *NordVPN) getFirstMatch(data string, regexp *regexp.Regexp) string {
+	ss := regexp.FindStringSubmatch(data)
+	if len(ss) > 1 {
+		return ss[1]
+	}
+	return ""
 }
 
 func (n *NordVPN) parseErr(cmd string, err error) {
@@ -74,7 +117,7 @@ func (n *NordVPN) parseErr(cmd string, err error) {
 		log.Errorf("on %s exceeded timeout", cmd)
 		n.status = STALLED
 	} else if err == ErrNoNet {
-		log.Debugln("on %s: no network", cmd)
+		log.Debugf("on %s: no network\n", cmd)
 		n.status = NONETWORK
 	} else {
 		log.Errorf("on %s: %s", cmd, err)
@@ -101,6 +144,26 @@ func (n *NordVPN) Disconnect() {
 		n.parseErr("disconnect", err)
 		return
 	}
+	n.status = DONE
+}
+
+func (n *NordVPN) EnableKillswitch() {
+	out, err := execCmd(2*time.Second, "nordvpn", "set", "killswitch", ENABLED)
+	if err != nil {
+		n.parseErr("enabled killswitch", err)
+		return
+	}
+	log.Debug(out)
+	n.status = DONE
+}
+
+func (n *NordVPN) DisableKillswitch() {
+	out, err := execCmd(2*time.Second, "nordvpn", "set", "killswitch", DISABLED)
+	if err != nil {
+		n.parseErr("disabled killswitch", err)
+		return
+	}
+	log.Debug(out)
 	n.status = DONE
 }
 

@@ -7,17 +7,21 @@ import (
 )
 
 type NordTray struct {
-	vpn         *NordVPN
-	loopTimeout time.Duration
-	loading     bool
-	mConnect    *systray.MenuItem
-	mDiconnect  *systray.MenuItem
-	mQuit       *systray.MenuItem
+	vpn            *NordVPN
+	loopTimeout    time.Duration
+	loading        bool
+	mConnect       *systray.MenuItem
+	mDiconnect     *systray.MenuItem
+	mKillswitchOff *systray.MenuItem
+	mKillswitchOn  *systray.MenuItem
+	mQuit          *systray.MenuItem
 }
 
 func newNordTray() *NordTray {
 	nt := &NordTray{vpn: &NordVPN{}, loopTimeout: 10 * time.Second}
 	nt.mConnect = systray.AddMenuItem("Connect", "Connect NordVPN")
+	nt.mKillswitchOff = systray.AddMenuItem("Activate Killswitch", "Killswitch is off")
+	nt.mKillswitchOn = systray.AddMenuItem("Disable Killswitch", "Killswitch is on")
 	nt.mDiconnect = systray.AddMenuItem("Disconnect", "Disconnect NordVPN")
 	nt.mQuit = systray.AddMenuItem("Quit", "Quit NordTray")
 
@@ -57,12 +61,23 @@ func (nt *NordTray) update() {
 			nt.mConnect.Show()
 			nt.mDiconnect.Hide()
 		}
+		if nt.vpn.killswitchOn {
+			nt.mKillswitchOn.Show()
+			nt.mKillswitchOff.Hide()
+		} else {
+			nt.mKillswitchOn.Hide()
+			nt.mKillswitchOff.Show()
+		}
 	case STALLED:
 		nt.mConnect.Show()
 		nt.mDiconnect.Show()
+		nt.mKillswitchOn.Show()
+		nt.mKillswitchOff.Show()
 	case FAILED:
 		nt.mConnect.Show()
 		nt.mDiconnect.Hide()
+		nt.mKillswitchOn.Show()
+		nt.mKillswitchOff.Hide()
 	}
 }
 
@@ -77,6 +92,14 @@ func (nt *NordTray) loop() {
 			go nt.loadingIcon()
 			nt.vpn.Disconnect()
 			nt.update()
+		case <-nt.mKillswitchOff.ClickedCh:
+			go nt.loadingIcon()
+			nt.vpn.EnableKillswitch()
+			nt.update()
+		case <-nt.mKillswitchOn.ClickedCh:
+			go nt.loadingIcon()
+			nt.vpn.DisableKillswitch()
+			nt.update()
 		case <-nt.mQuit.ClickedCh:
 			systray.Quit()
 			return
@@ -89,9 +112,9 @@ func (nt *NordTray) loop() {
 func (nt *NordTray) loadingIcon() {
 	for nt.loading = true; nt.loading; {
 		systray.SetIcon(inactiveIcon)
-		time.Sleep(300 * time.Millisecond)
+		time.Sleep(100 * time.Millisecond)
 		systray.SetIcon(activeIcon)
-		time.Sleep(300 * time.Millisecond)
+		time.Sleep(100 * time.Millisecond)
 	}
 
 	nt.determineIcon()
