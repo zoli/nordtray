@@ -15,8 +15,10 @@ type (
 
 	NordVPN struct {
 		sync.Mutex
-		status    Status
-		connected bool
+		status     Status
+		connected  bool
+		killswtich bool
+		server     string
 	}
 )
 
@@ -29,12 +31,17 @@ const (
 	CONNECTED    = "Connected"
 	DISCONNECTED = "Disconnected"
 
+	ENABLED  = "enabled"
+	DISABLED = "disabled"
+
 	noNetErrStr = "Please check your internet connection and try again"
 )
 
 var (
-	ErrNoNet = errors.New("no network connection")
-	statusRe = regexp.MustCompile("Status: (.*)")
+	ErrNoNet     = errors.New("no network connection")
+	reConStatus  = regexp.MustCompile("Status: (.*)")
+	reServer     = regexp.MustCompile("Current server: (.*)")
+	reKillSwitch = regexp.MustCompile("Kill Switch: (.*)")
 )
 
 func (n *NordVPN) Update() {
@@ -43,42 +50,75 @@ func (n *NordVPN) Update() {
 
 	out, err := execCmd(2*time.Second, "nordvpn", "status")
 	if err != nil {
+		n.parseErr("update on status", err)
+		return
+	}
+	n.status = DONE
+	n.parseStatus(out)
+
+	out, err = execCmd(2*time.Second, "nordvpn", "settings")
+	if err != nil {
 		n.parseErr("update", err)
 		return
 	}
-
-	n.status = DONE
-	n.parse(out)
+	n.parseSettings(out)
 }
 
-func (n *NordVPN) parse(data string) {
-	var status string
-	ss := statusRe.FindStringSubmatch(data)
+func (n *NordVPN) parseStatus(data string) {
+	var conStatus string
+	ss := reConStatus.FindStringSubmatch(data)
 	if len(ss) > 1 {
-		status = ss[1]
+		conStatus = ss[1]
 	}
 
-	switch status {
+	switch conStatus {
 	case CONNECTED:
 		n.connected = true
+		n.updateServer(data)
 	case DISCONNECTED:
 		n.connected = false
 	default:
 		n.status = STALLED
-		log.Warnf("unrecognized status %s", status)
+		log.Warnf("unrecognized status %s: %s", data, conStatus)
+	}
+}
+
+func (n *NordVPN) parseSettings(data string) {
+	var ks string
+	ss := reKillSwitch.FindStringSubmatch(data)
+	if len(ss) > 1 {
+		ks = ss[1]
+	}
+
+	switch ks {
+	case ENABLED:
+		n.killswtich = true
+	case DISABLED:
+		n.killswtich = false
+	default:
+		n.status = STALLED
+		log.Warnf("unrecognized kill swtich %s: %s", data, ks)
 	}
 }
 
 func (n *NordVPN) parseErr(cmd string, err error) {
-	if err == context.DeadlineExceeded {
+	switch err {
+	case context.DeadlineExceeded:
 		log.Errorf("on %s exceeded timeout", cmd)
 		n.status = STALLED
-	} else if err == ErrNoNet {
+	case ErrNoNet:
 		log.Debugln("on %s: no network", cmd)
 		n.status = NONETWORK
-	} else {
+	default:
 		log.Errorf("on %s: %s", cmd, err)
 		n.status = FAILED
+	}
+}
+
+func (n *NordVPN) updateServer(data string) {
+	ss := reServer.FindStringSubmatch(data)
+	if len(ss) > 1 {
+		n.server = ss[1]
 	}
 }
 
@@ -106,4 +146,26 @@ func (n *NordVPN) Disconnect() {
 
 func (n *NordVPN) Connected() bool {
 	return n.connected
+}
+
+func (n *NordVPN) Server() string {
+	return n.server
+}
+
+func (n *NordVPN) KillSwitch() bool {
+	return n.killswtich
+}
+
+func (n *NordVPN) SetKillSwitch(v bool) {
+	s := "on"
+	if !v {
+		s = "off"
+	}
+
+	_, err := execCmd(3*time.Second, "nordvpn", "set", "killswitch", s)
+	if err != nil {
+		n.parseErr("set killswitch", err)
+		return
+	}
+	n.status = DONE
 }
