@@ -4,6 +4,7 @@ import (
 	"context"
 	"errors"
 	"regexp"
+	"strings"
 	"sync"
 	"time"
 
@@ -126,8 +127,15 @@ func (n *NordVPN) Status() Status {
 	return n.status
 }
 
-func (n *NordVPN) Connect() {
-	_, err := execCmd(3*time.Second, "nordvpn", "c")
+func (n *NordVPN) Connect(country string) {
+	var err error
+
+	// cannot just pass "" as execCmd argument after "c", the executable will think we try to connect to "" instead of whatever country is best
+	if country == "" {
+		_, err = execCmd(3*time.Second, "nordvpn", "c")
+	} else {
+		_, err = execCmd(3*time.Second, "nordvpn", "c", country)
+	}
 	if err != nil {
 		n.parseErr("connect", err)
 		return
@@ -168,4 +176,28 @@ func (n *NordVPN) SetKillSwitch(v bool) {
 		return
 	}
 	n.status = DONE
+}
+
+func (n *NordVPN) GetCountries() []string {
+	n.Lock()
+	defer n.Unlock()
+
+	out, err := execCmd(2*time.Second, "nordvpn", "countries")
+	if err != nil {
+		n.parseErr("get countries", err)
+		return nil
+	}
+	n.status = DONE
+	return n.parseCountries(out)
+}
+
+func (n *NordVPN) parseCountries(data string) []string {
+	spaceTrimmedData := strings.TrimSpace(data)
+	splittedData := strings.Split(spaceTrimmedData, ", ")
+	sanitizedData := []string{}
+	for _, d := range splittedData {
+		// underscores will be removed from title, but replacing with space yields a better visual
+		sanitizedData = append(sanitizedData, strings.ReplaceAll(d, "_", " "))
+	}
+	return sanitizedData
 }

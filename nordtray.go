@@ -1,8 +1,10 @@
 package main
 
 import (
+	"strings"
 	"time"
 
+	"github.com/biter777/countries"
 	"github.com/getlantern/systray"
 )
 
@@ -10,20 +12,56 @@ type NordTray struct {
 	vpn         *NordVPN
 	loopTimeout time.Duration
 	loading     bool
+	mCountries  *systray.MenuItem
 	mConnect    *systray.MenuItem
 	mDiconnect  *systray.MenuItem
 	mQuit       *systray.MenuItem
 	mKillSwitch *systray.MenuItem
+	countryMap  map[string]*systray.MenuItem
 }
 
 func newNordTray() *NordTray {
 	nt := &NordTray{vpn: &NordVPN{}, loopTimeout: 10 * time.Second}
+
+	// avoid name clash with countries package above
+	nordVPNcountries := nt.vpn.GetCountries()
+	nt.countryMap = map[string]*systray.MenuItem{}
+	nt.mCountries = systray.AddMenuItem("Countries", "Select a country to connect NordVPN server to")
+	for _, country := range nordVPNcountries {
+		countryMenuItem := nt.mCountries.AddSubMenuItemCheckbox(country, "", false)
+		// as the countries are dynamic, we cannot use a single goroutine with for-select that handles all countries
+		// hence this one goroutine per country approach. worry not, it's still CPU efficient
+		go func() {
+			for {
+				<-countryMenuItem.ClickedCh
+				for _, m := range nt.countryMap {
+					if m != countryMenuItem {
+						m.Uncheck()
+					}
+				}
+				// UI's checked state is not automatically propagated, we must handle (un)checking ourselves
+				countryMenuItem.Check()
+			}
+		}()
+		countryCodeAlpha2 := strings.ToLower(countries.ByName(strings.TrimSpace(country)).Alpha2())
+		nt.countryMap[countryCodeAlpha2] = countryMenuItem
+	}
+
 	nt.mConnect = systray.AddMenuItem("Connect", "Connect NordVPN")
 	nt.mDiconnect = systray.AddMenuItem("Disconnect", "Disconnect NordVPN")
 	nt.mKillSwitch = systray.AddMenuItemCheckbox("Kill Switch", "Toggle kill switch", false)
 	nt.mQuit = systray.AddMenuItem("Quit", "Quit NordTray")
 
 	return nt
+}
+
+func (nt *NordTray) getCheckedCountry() string {
+	for c, m := range nt.countryMap {
+		if m.Checked() {
+			return c
+		}
+	}
+	return ""
 }
 
 func (nt *NordTray) run() {
@@ -81,7 +119,7 @@ func (nt *NordTray) loop() {
 		select {
 		case <-nt.mConnect.ClickedCh:
 			go nt.loadingIcon()
-			nt.vpn.Connect()
+			nt.vpn.Connect(nt.getCheckedCountry())
 			nt.update()
 		case <-nt.mDiconnect.ClickedCh:
 			go nt.loadingIcon()
