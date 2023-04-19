@@ -1,10 +1,9 @@
 package main
 
 import (
-	"strings"
+	"sort"
 	"time"
 
-	"github.com/biter777/countries"
 	"github.com/getlantern/systray"
 )
 
@@ -23,12 +22,17 @@ type NordTray struct {
 func newNordTray() *NordTray {
 	nt := &NordTray{vpn: &NordVPN{}, loopTimeout: 10 * time.Second}
 
-	// avoid name clash with countries package above
-	nordVPNcountries := nt.vpn.GetCountries()
+	countryCodeMap := nt.vpn.GetCountryCodeMap()
+	countryNames := make([]string, 0, len(countryCodeMap))
+	for countryName := range countryCodeMap {
+		countryNames = append(countryNames, countryName)
+	}
+	sort.Strings(countryNames)
+
 	nt.countryMap = map[string]*systray.MenuItem{}
 	nt.mCountries = systray.AddMenuItem("Countries", "Select a country to connect NordVPN server to")
-	for _, country := range nordVPNcountries {
-		countryMenuItem := nt.mCountries.AddSubMenuItemCheckbox(country, "", false)
+	for _, name := range countryNames {
+		countryMenuItem := nt.mCountries.AddSubMenuItemCheckbox(name, "", false)
 		// as the countries are dynamic, we cannot use a single goroutine with for-select that handles all countries
 		// hence this one goroutine per country approach. worry not, it's still CPU efficient
 		go func() {
@@ -43,8 +47,8 @@ func newNordTray() *NordTray {
 				countryMenuItem.Check()
 			}
 		}()
-		countryCodeAlpha2 := strings.ToLower(countries.ByName(strings.TrimSpace(country)).Alpha2())
-		nt.countryMap[countryCodeAlpha2] = countryMenuItem
+		code := countryCodeMap[name]
+		nt.countryMap[code] = countryMenuItem
 	}
 
 	nt.mConnect = systray.AddMenuItem("Connect", "Connect NordVPN")

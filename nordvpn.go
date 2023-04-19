@@ -2,7 +2,10 @@ package main
 
 import (
 	"context"
+	"encoding/json"
 	"errors"
+	"io"
+	"net/http"
 	"regexp"
 	"strings"
 	"sync"
@@ -21,6 +24,8 @@ type (
 		killswtich bool
 		server     string
 	}
+
+	CountryCodeMap map[string]string
 )
 
 const (
@@ -178,26 +183,47 @@ func (n *NordVPN) SetKillSwitch(v bool) {
 	n.status = DONE
 }
 
-func (n *NordVPN) GetCountries() []string {
+func (n *NordVPN) GetCountryCodeMap() CountryCodeMap {
 	n.Lock()
 	defer n.Unlock()
 
-	out, err := execCmd(2*time.Second, "nordvpn", "countries")
+	var client http.Client
+	resp, err := client.Get("https://api.nordvpn.com/v1/servers/countries")
 	if err != nil {
-		n.parseErr("get countries", err)
+		n.parseErr("http get", err)
 		return nil
 	}
-	n.status = DONE
-	return n.parseCountries(out)
-}
+	defer resp.Body.Close()
 
-func (n *NordVPN) parseCountries(data string) []string {
-	spaceTrimmedData := strings.TrimSpace(data)
-	splittedData := strings.Split(spaceTrimmedData, ", ")
-	sanitizedData := []string{}
-	for _, d := range splittedData {
-		// underscores will be removed from title, but replacing with space yields a better visual
-		sanitizedData = append(sanitizedData, strings.ReplaceAll(d, "_", " "))
+	cm := CountryCodeMap{}
+	if resp.StatusCode == http.StatusOK {
+		bodyBytes, err := io.ReadAll(resp.Body)
+		if err != nil {
+			n.parseErr("http body read", err)
+			return nil
+		}
+
+		type (
+			// list only interesting fields, ignore the rest
+			Country struct {
+				Name string `json:"name"`
+				Code string `json:"code"`
+			}
+			CountryList []Country
+		)
+
+		var cl CountryList
+		err = json.Unmarshal(bodyBytes, &cl)
+		if err != nil {
+			n.parseErr("json unmarshal", err)
+			return nil
+		}
+
+		for _, c := range cl {
+			cm[c.Name] = strings.ToLower(c.Code)
+		}
 	}
-	return sanitizedData
+
+	n.status = DONE
+	return cm
 }
