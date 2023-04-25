@@ -2,8 +2,12 @@ package main
 
 import (
 	"context"
+	"encoding/json"
 	"errors"
+	"io"
+	"net/http"
 	"regexp"
+	"strings"
 	"sync"
 	"time"
 
@@ -20,6 +24,8 @@ type (
 		killswtich bool
 		server     string
 	}
+
+	CountryCodeMap map[string]string
 )
 
 const (
@@ -126,8 +132,15 @@ func (n *NordVPN) Status() Status {
 	return n.status
 }
 
-func (n *NordVPN) Connect() {
-	_, err := execCmd(3*time.Second, "nordvpn", "c")
+func (n *NordVPN) Connect(country string) {
+	var err error
+
+	// cannot just pass "" as execCmd argument after "c", the executable will think we try to connect to "" instead of whatever country is best
+	if country == "" {
+		_, err = execCmd(3*time.Second, "nordvpn", "c")
+	} else {
+		_, err = execCmd(3*time.Second, "nordvpn", "c", country)
+	}
 	if err != nil {
 		n.parseErr("connect", err)
 		return
@@ -168,4 +181,49 @@ func (n *NordVPN) SetKillSwitch(v bool) {
 		return
 	}
 	n.status = DONE
+}
+
+func (n *NordVPN) GetCountryCodeMap() CountryCodeMap {
+	n.Lock()
+	defer n.Unlock()
+
+	var client http.Client
+	resp, err := client.Get("https://api.nordvpn.com/v1/servers/countries")
+	if err != nil {
+		n.parseErr("http get", err)
+		return nil
+	}
+	defer resp.Body.Close()
+
+	cm := CountryCodeMap{}
+	if resp.StatusCode == http.StatusOK {
+		bodyBytes, err := io.ReadAll(resp.Body)
+		if err != nil {
+			n.parseErr("http body read", err)
+			return nil
+		}
+
+		type (
+			// list only interesting fields, ignore the rest
+			Country struct {
+				Name string `json:"name"`
+				Code string `json:"code"`
+			}
+			CountryList []Country
+		)
+
+		var cl CountryList
+		err = json.Unmarshal(bodyBytes, &cl)
+		if err != nil {
+			n.parseErr("json unmarshal", err)
+			return nil
+		}
+
+		for _, c := range cl {
+			cm[c.Name] = strings.ToLower(c.Code)
+		}
+	}
+
+	n.status = DONE
+	return cm
 }
