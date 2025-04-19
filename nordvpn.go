@@ -22,6 +22,7 @@ type (
 		status     Status
 		connected  bool
 		killswtich bool
+		meshnet    bool
 		server     string
 	}
 
@@ -46,6 +47,7 @@ const (
 var (
 	ErrNoNet     = errors.New("no network connection")
 	reConStatus  = regexp.MustCompile("Status: (.*)")
+	reMeshStatus = regexp.MustCompile("Meshnet: (.*)")
 	reServer     = regexp.MustCompile("Current server: (.*)")
 	reKillSwitch = regexp.MustCompile("Kill Switch: (.*)")
 )
@@ -68,6 +70,7 @@ func (n *NordVPN) Update() {
 		return
 	}
 	n.parseSettings(out)
+	n.parseMeshnet(out)
 }
 
 func (n *NordVPN) parseStatus(data string) {
@@ -161,6 +164,10 @@ func (n *NordVPN) Connected() bool {
 	return n.connected
 }
 
+func (n *NordVPN) Meshnet() bool {
+	return n.meshnet
+}
+
 func (n *NordVPN) Server() string {
 	return n.server
 }
@@ -226,4 +233,36 @@ func (n *NordVPN) GetCountryCodeMap() CountryCodeMap {
 
 	n.status = DONE
 	return cm
+}
+
+func (n *NordVPN) parseMeshnet(data string) {
+	var meshStatus string
+	ms := reMeshStatus.FindStringSubmatch(data)
+	if len(ms) > 1 {
+		meshStatus = ms[1]
+	}
+
+	switch meshStatus {
+	case ENABLED:
+		n.meshnet = true
+	case DISABLED:
+		n.meshnet = false
+	default:
+		n.status = STALLED
+		log.Warnf("unrecognized meshnet %s: %s", data, ms)
+	}
+}
+
+func (n *NordVPN) SetMeshnet(v bool) {
+	s := "on"
+	if !v {
+		s = "off"
+	}
+
+	_, err := execCmd(3*time.Second, "nordvpn", "set", "meshnet", s)
+	if err != nil {
+		n.parseErr("set meshnet", err)
+		return
+	}
+	n.status = DONE
 }

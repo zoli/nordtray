@@ -16,6 +16,7 @@ type NordTray struct {
 	mDiconnect  *systray.MenuItem
 	mQuit       *systray.MenuItem
 	mKillSwitch *systray.MenuItem
+	mMeshnet    *systray.MenuItem
 	countryMap  map[string]*systray.MenuItem
 }
 
@@ -54,6 +55,7 @@ func newNordTray() *NordTray {
 	nt.mConnect = systray.AddMenuItem("Connect", "Connect NordVPN")
 	nt.mDiconnect = systray.AddMenuItem("Disconnect", "Disconnect NordVPN")
 	nt.mKillSwitch = systray.AddMenuItemCheckbox("Kill Switch", "Toggle kill switch", false)
+	nt.mMeshnet = systray.AddMenuItemCheckbox("Meshnet", "Toggle meshnet", false)
 	nt.mQuit = systray.AddMenuItem("Quit", "Quit NordTray")
 
 	return nt
@@ -107,6 +109,11 @@ func (nt *NordTray) update() {
 		} else {
 			nt.mKillSwitch.Uncheck()
 		}
+		if nt.vpn.Meshnet() {
+			nt.mMeshnet.Check()
+		} else {
+			nt.mMeshnet.Uncheck()
+		}
 	case STALLED:
 		nt.mConnect.Show()
 		nt.mDiconnect.Show()
@@ -115,6 +122,10 @@ func (nt *NordTray) update() {
 		nt.mConnect.Show()
 		nt.mDiconnect.Hide()
 		nt.mKillSwitch.Disable()
+	}
+
+	if nt.vpn.Meshnet() {
+		nt.mMeshnet.Enable()
 	}
 }
 
@@ -136,6 +147,9 @@ func (nt *NordTray) loop() {
 		case <-nt.mQuit.ClickedCh:
 			systray.Quit()
 			return
+		case <-nt.mMeshnet.ClickedCh:
+			nt.vpn.SetMeshnet(!nt.vpn.Meshnet())
+			nt.update()
 		case <-time.After(nt.loopTimeout):
 			nt.update()
 		}
